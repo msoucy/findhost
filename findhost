@@ -7,21 +7,24 @@ import paramiko
 import sys
 
 
-def matchHosts(hostlist, username, threshold, filt):
+def matchHosts(hostlist, username, threshold, filt, password=None):
     ''' Perform an action on hosts
 
     SSHs into each host and performs a given filter based on its current load
     '''
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    password = None
 
     for host in (line for line in (line.split("#")[0].strip() for line in open(hostlist)) if line):
         try:
             ssh.connect(host, username=username, password=password)
-        except paramiko.PasswordRequiredException:
-            password = getpass.getpass(prompt="Error: password required: ")
-            ssh.connect(host, username=username, password=password)
+        except paramiko.AuthenticationException:
+	    print "Error: username and password incorrect"
+	    username = raw_input("Username: ")
+	    password = getpass.getpass()
+	    matchHosts(hostlist, username, threshold, filt, password)
+	    return
+
         stdin, stdout, stderr = ssh.exec_command("cat /proc/loadavg")
         load = float(stdout.read().split()[2])
         stdin, stdout, stderr = ssh.exec_command("cat /proc/cpuinfo")
@@ -35,6 +38,7 @@ def printSSH(username, host, load, threshold):
     ''' Print out the host if it's below the threshold '''
     if(load < threshold):
         sys.stdout.write("{}@{}\n".format(username, host))
+	sys.stdout.flush()
         return True
     else:
         return False
@@ -42,7 +46,8 @@ def printSSH(username, host, load, threshold):
 
 def printAll(username, host, load, threshold):
     ''' Print out every host with its load '''
-    sys.stdout.write("{}\t{}".format(host, load))
+    sys.stdout.write("{}\t{}\n".format(host, load))
+    sys.stdout.flush()
     return False
 
 
